@@ -1,0 +1,6 @@
+script to test a particular code over a range of ips
+
+ip's are recived in donet_fun, where a quick code can 
+be written to check certain functions over that.
+
+
