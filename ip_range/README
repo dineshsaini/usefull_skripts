@@ -1,6 +1,10 @@
 script to test a particular code over a range of ips
 
-ip's are recived in donet_fun, where a quick code can 
-be written to check certain functions over that.
+eg.
+
+generate a range of ips and execute the specified command on each one.
+./iprage -r -s 10.10.10.2 -e 10.10.10.3 -i -x -c 'ping $_IP_ -c 1'
 
 
+read file for recorded null seperated hosts and execute do_scan.sh for each one and store the result in scan_log.txt in null seperated string
+./iprage -l -f ./host_list.txt -0 -x -f do_scan.sh -o -f scan_log.txt -0
