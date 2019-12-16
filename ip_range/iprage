@@ -1,0 +1,279 @@
+#!/bin/bash
+
+rl="";
+s_ip="";
+e_ip="";
+inc="0";
+ifile="";
+in_dem="0";
+ofile="";
+out_dem="\n";
+exe="";
+efile="";
+ecmd="";
+flag="0";
+
+function help(){
+	echo -e "-r|--range\tSpecify range for ip.";
+	echo -e "\t-s|--start\tStart address (inclusive).";
+	echo -e "\t-e|--end\tEnd address (exclusive).";
+	echo -e "\t-i|-inc|--inc\tinclude end address also.";
+	echo -e "-l|--list\tSpecify list if ips to iterate. Please note that range and list are mutually exclusive and id both are specified then last one will take prefrence.";
+	echo -e "\t-\tRead from stdin";
+	echo -e "\t-f\tRead from file";
+	echo -e "\t-0\tlines are null seperated. deafult is newline."
+	echo -e "-o|--output\tSpecify output options"
+	echo -e "\t-f\tspecify output file"
+	echo -e "\t-\tredirect to stdout"
+	echo -e "\t-0\toutput result is null seperated. default is newline";
+	echo -e "-x|--exec\texecute command for each iteration of ip. '_IP_' variable is reserved and contains latest ip at each loop, this can be used to create complex command."
+	echo -e "\t-f|--file\tspecify file to execute at each iteration, use '\$_IP_' variable inside script for curent ip. "
+	echo -e "\t-c|--cmd\tspecify command to execute at each iteration, use ' (single quote) to escape command or else '\$_IP_' variable will get expanded by shell";
+	echo -e "-h|--help\tShow help and exit";
+	exit 0;
+}
+
+function ip_check(){
+	RETVAL=0;
+	if [[ $(echo $1 | sed 's/\./\n/g' | wc -l) -ne 4 ]]; then
+		RETVAL=-1;
+	else 
+		for i in $(echo $1 | sed 's/\./ /g' ); do
+			if [[ $i -lt 0 || $i -gt 255 ]]; then
+				RETVAL=-1;
+				break;
+			fi;
+		done;
+	fi;
+	echo $RETVAL;
+}
+
+function is_valid_range(){
+	RETVAL=0;
+	a=$(( "$(echo $1 | cut -d. -f1)" - "$(echo $2 | cut -d. -f1)" ));
+	if [[ $a -gt 0 ]]; then
+		RETVAL=-1;
+	elif [[ $a -eq 0 ]]; then
+		b=$(( "$(echo $1 | cut -d. -f2)" - "$(echo $2 | cut -d. -f2)" ));	
+		if [[ $b -gt 0 ]]; then
+			RETVAL=-1;
+		elif [[ $b -eq  0 ]]; then
+			c=$(( "$(echo $1 | cut -d. -f3)" - "$(echo $2 | cut -d. -f3)" ));
+			if [[ $c -gt 0 ]]; then
+				RETVAL=-1;
+			elif [[ $c -eq 0 ]]; then
+				d=$(( "$(echo $1 | cut -d. -f4)" - "$(echo $2 | cut -d. -f4)" ));
+				if [[ $d -gt 0 ]]; then
+				       RETVAL=-1;
+				fi;
+			fi;
+		fi;
+	fi;
+	echo $RETVAL;
+}
+
+function output(){
+	while read line; do
+		echo -n -e "$line$out_dem" >> $ofile;
+	done;
+}
+
+
+function execute(){
+	if [ "$exe" == "f" ]; then
+		_IP_=$1 bash $efile;
+	elif [ "$exe" == "c" ]; then
+		_IP_=$1 eval $ecmd;
+	else
+		echo $1;
+	fi;
+}
+
+function explode_range(){
+	local ip1=$1;
+	local ip2=$2;
+	while [[ "$ip1" != "$ip2" ]]; do
+		execute $ip1 | output;
+		a="$( echo $ip1 | cut -d. -f1)";
+		b="$( echo $ip1 | cut -d. -f2)";
+		c="$( echo $ip1 | cut -d. -f3)";
+		d="$( echo $ip1 | cut -d. -f4)";
+
+		if [[ $d -lt 255 ]]; then
+			d="$(( $d + 1 ))";
+		else
+			d=0;
+			if [[ $c -lt 255 ]]; then
+				c="$(( $c + 1 ))";
+			else
+				c=0;
+				if [[ $b -lt 255 ]]; then
+					b="$(( $b + 1 ))";
+				else
+					b=0;
+					if [[ $a -lt 255 ]]; then
+						a="$(( $a + 1 ))";
+					else
+						break;
+					fi;
+				fi;
+			fi;
+		fi;
+		ip1="$a.$b.$c.$d";
+	done;
+	if [[ $3 -eq 1 ]]; then
+		execute $ip2 | output;
+	fi;
+}
+
+
+while [[ $# -gt 0 ]]; do
+	case $1 in
+		-r|--range)
+			rl="r";
+			shift;
+			flag=1;
+			while [[ $flag -ne 0 ]]; do
+				case $1 in
+					-s|--start)
+						s_ip=$2;
+						shift;
+						shift;
+						;;
+					-e|--end)
+						e_ip=$2;
+						shift;
+						shift;
+						;;
+					-i|-inc|--inc)
+						inc="1";
+						shift;
+						;;
+					*)
+						flag=0;
+						;;
+				esac;
+			done;
+			;;
+		-l|--list)
+			rl="l";
+			shift;
+			flag=1;
+			while [[ $flag -ne 0 ]]; do
+				case $1 in 
+					-f|--file)
+						ifile=$2;
+						shift;
+						shift;
+						;;
+					-)
+						ifile="/dev/stdin";
+						shift;
+						;;
+					-0)
+						in_dem="1";
+						shift;
+						;;
+					*)
+						flag=0;
+						;;
+				esac;
+			done;
+			;;
+		-o|--output)
+			shift;
+			flag=1;
+			while [[ $flag -ne 0 ]]; do
+				case $1 in
+					-f|--file)
+						ofile=$2;
+						shift;
+						shift;
+						;;
+					-)
+						ofile="/dev/stdout";
+						shift;
+						;;
+					-0)
+						out_dem="\0";
+						shift;
+						;;
+					*)
+						flag=0;
+						;;
+				esac;
+			done;
+			;;
+		-h|--help)
+			help;
+			shift;
+			;;
+		-x|--exec)
+			shift;
+			flag=1;
+			while [[ $flag -ne 0 ]]; do
+				case $1 in
+					-f|--file)
+						exe="f";
+						efile=$2;
+						shift;
+						shift;
+						;;
+					-c|--cmd)
+						exe="c";
+						ecmd="$2";
+						shift;
+						shift;
+						;;
+					*)
+						flag=0;
+						;;
+				esac;
+			done;
+			;;
+		*)
+			echo "ERROR: '$1' is not an option, see help.";
+			exit 1;
+			;;
+	esac;
+done;
+
+if [ "$ofile" == "" ]; then
+	ofile="/dev/stdout";
+fi;
+
+if [ "$rl" == "r" ]; then
+	if [ "$s_ip" == "" ] || [ "$e_ip" == "" ]; then
+		echo "ERROR: invalid range";
+		exit -1;
+	fi;
+
+	if [[ $(ip_check $s_ip) -ne 0 ]] || [[ $(ip_check $e_ip) -ne 0 ]]; then
+		echo "invalid ip" ;
+		exit -1;
+	fi;
+	if [[ $(is_valid_range $s_ip $e_ip) -ne 0 ]]; then 
+		echo "start ip should be small";
+	       	exit -1;
+	fi;
+	explode_range $s_ip $e_ip $inc;
+elif [ "$rl" == "l" ]; then
+	if [ "$ifile" == "" ]; then
+		echo "ERROR: input file missing";
+		exit -1;
+	fi;
+
+	if [[ $in_dem -eq 0 ]]; then
+		for i in $(awk '{print}' $ifile); do
+			execute $i | output;
+		done;
+	elif [[ $in_dem -eq 1 ]]; then
+		while IFS= read -r -d '' i; do
+			execute $i | output;
+		done < <(cat $ifile);
+	fi;
+else
+	echo "ERROR: atleast one from range or list should be provided".
+	exit -1;
+fi;
+
