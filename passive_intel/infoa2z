@@ -1,0 +1,473 @@
+#!/usr/bin/bash
+
+v_browser="0";		# which browser to use (0 => wget, 1=> curl)
+b_opts="";		# use -= [pass options] -= to pass options to browser, this will give higer control
+			# of browser to user, will be good at later.
+
+re_mail="";		# regex to be used to find emails.
+re_domain="";		# regex to be used to find domains.
+re_mob="";		# regex to be used to find contacts.
+re_raw="";		# custom regex to be used to find custom info.
+
+t_tar="0";		# target to use ( 1=> domain, 2=> people, 3 => raw)
+t_domain="";		# target domain
+t_people="";		# target people
+
+s_google="0";		# search google (0 => disable, 1 => enable)
+g_guess="0";		# along with the keywords/query provided, guess the results also. (0 => don't guess, 1 => guess)
+g_nop="4"; 		# google no of pages (-1 as inf)
+g_rpp="30"; 		# results per page (10, 20, 30, 50, 100)
+g_tr="-1";		# total results (-1 for as many, +ve => stop after this much)
+g_query="";		# user's provided query
+g_pre_q="0";		# query pre formated (0 => need to format, 1 => do not process `$g_query` value, use as-is)
+
+e_domain="0";		# extract domain (0 => flase, 1 => true), use re_doamin to extract
+e_email="0";		# extract email addresses (0 => false, 1 => true), use re_mail to extract
+e_mob="0";		# extract contact numbers (0 => false, 1 => true), use re_mob to extract ## only if target is people
+e_raw="0";		# extract raw info (0 => false, 1=> true), use re_raw to extract ## only if re_raw is defined	
+e_url="0";		# extract urls (0 => false, 1=> true), use re_url to extract  ## only if target is people
+
+h_subd="0";		# harvest subdomain in seperate dictionary file
+h_snaps="0";		# harvest snapshot of urls ## only if e_url is 1
+
+r_freq="0";		# report frequecy of occurence of domain
+
+o_file="";		# output file to use
+o_subd_file="";		# save subdomains in this
+
+v_delay="1";		# min. delay between requests values (0,\[0-9]+[sm]\)
+v_verbose=0;		# be verbose
+
+FLAG_EXTGLOB_DISABLED=$(shopt | grep "extglob" | grep "off$" | wc -l);
+
+[[ $FLAG_EXTGLOB_DISABLED -eq 1 ]] && shopt -s extglob;
+
+function help {
+	echo "help;";
+	exit 0;
+}
+
+function queryEnc {
+	echo $(echo "$1" | sed -e 's/%/%25/g' -e 's/!/%21/g' \
+		-e 's/"/%22/g' -e 's/#/%23/g' -e 's/\$/%24/g' \
+	       	-e 's/\&/%26/g' -e 's/'\''/%27/g' -e 's/(/%28/g' \
+		-e 's/)/%29/g' -e 's/+/%2B/g' -e 's/,/%2C/g' \
+		-e 's/\//%2F/g' -e 's/:/%3A/g' -e 's/;/%3B/g' \
+		-e 's//%3E/g' -e 's/?/%3F/g' -e 's/@/%40/g' \
+		-e 's/\[/%5B/g' -e 's/\\/%5C/g' -e 's/\]/%5D/g' \
+		-e 's/\^/%5E/g' -e 's/`/%60/g' -e 's/{/%7B/g' \
+		-e 's/|/%7C/g' -e 's/}/%7D/g' -e 's/~/%7E/g' \
+		-e 's/ /+/g' -e 's/=/%3D/g' -e 's/</%3C/g'  \
+		-e 's/>/%3E/g');
+}
+
+
+# $1 => url (required)
+# $2 => outfile (if not, create tempfile and return the location, after operation)
+# return => outfile location or error code as retured from command.
+# TODO: FIXME: need to work on browse
+function browse {
+	url="$1";
+	if [[ x"$url" == "x" ]]; then
+		echo -1;
+		return;
+	fi;
+
+	oFile="$( ([[ x"$2" == "x" ]] && tempfile) || echo $2)";
+	retval=0;
+	if [[ $v_browser -eq 0 ]]; then
+		wget $b_opts -q $url -O $oFile ;
+		retval="$?";
+	else
+		curl $b_opts -s $url -o $oFile;
+		retval="$?";
+	fi;	
+	
+	if [[ $retval -eq 0 ]]; then
+		echo "$oFile";	
+	else
+		echo "$retval";
+	fi;
+}
+
+
+# $1 => query (required) 
+# $2 => page navigation query string (required)
+# $3 => file 
+# returns response file location
+function google_srch {
+	query="$1";
+#	[[ $v_verbose -ge 1 ]] && (echo "got query: $query");
+	if [[ x"$query" == "x" ]]; then
+#		[[ $v_verbose -ge 1 ]] && (echo "recieved null  query, exiting");
+		echo "-1";
+		return;
+	fi;
+	
+	nqstr="$2";
+#	[[ $v_verbose -ge 1 ]] && (echo "got query params: $nqstr");
+	if [[ x"$nqstr" == "x" ]]; then
+#		[[ $v_verbose -ge 1 ]] && (echo "recieved null  query params, exiting");
+		echo "-2";
+		return;
+	fi;
+
+	gws="https://www.google.com";
+	url="$gws/search?gbv=1&sei=rlcLXr_JAdXE4-EP6oOmcA&q=$query&$nqstr";
+
+	oFile="$( ([[ x"$3" == "x" ]] && tempfile) || echo $3)";
+#	cFile="$(tempfile)";
+	tFile="$(tempfile)";
+
+#	[[ $v_verbose -ge 1 ]] && (echo "using url: $url");
+#	[[ $v_verbose -ge 1 ]] && (echo "using out file: $oFile");
+#	[[ $v_verbose -gt 1 ]] && (echo "wget user options found : $b_opts");
+
+	wget "$url" --header='Host: www.google.com' \
+		--header='User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0' \
+		--header='Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
+		--header='Accept-Language: en-US,en;q=0.5' \
+		--header='Accept-Encoding: gzip, deflate' \
+		--header='Referer: https://www.google.com/' \
+		--header='DNT: 1' \
+		--header='Connection: keep-alive' \
+		--header='Upgrade-Insecure-Requests: 1'  \
+		--header='Cache-Control: max-age=0, no-cache' \
+		--header='Pragma: no-cache'  \
+		--header='TE: Trailers' \
+		-O $tFile \
+		--quiet $b_opts ;
+	retval=$?;
+#	[[ $v_verbose -gt 1 ]] && (echo "wget return status: $retval");
+	if [[ $retval -ne 0 ]]; then
+#		[[ $v_verbose -ge 1 ]] && (echo "wget return error, exiting");
+		echo $retval;
+		return;
+	fi;
+#	if [[ x"$cFile" != "x" ]]; then
+#		rm -f $cFile;
+#	fi;
+
+	if [[ x"$tFile" != "x" ]]; then
+#		[[ $v_verbose -ge 1 ]] && (echo "uncompressing recieved output");
+		cat $tFile | gunzip > $oFile;
+		rm -f $tFile;
+	fi;
+#	[[ $v_verbose -gt 1 ]] && (echo "returning file: $oFile");
+	echo $oFile;
+}
+function analyse {
+	page=$1;
+	hasNext=1;
+	gotAll=0;
+	
+#	[[ $v_verbose -ge 1 ]] && (echo "analysing: $page");
+	
+	echo $page >> $o_file;
+	
+#	[[ $v_verbose -ge 1 ]] && (echo "done analysing: $page");
+
+	echo "$hasNext,$gotAll";
+}
+
+
+function google {
+	query="$1";
+	pageN=0;
+	hasNext=1;
+	gotAll=0;
+
+	case $(($g_rpp/10)) in
+		1)
+			g_rpp=10;
+			;;
+		2)
+			g_rpp=20;
+			;;
+		3)
+			g_rpp=30;
+			;;
+		4)
+			g_rpp=40;
+			;;
+		5)
+			g_rpp=50;
+			;;
+		10)
+			g_rpp=100;
+			;;
+		*)
+			g_rpp=30;
+			;;
+	esac;
+	if [[ $g_nop -le 0 ]]; then
+		$g_nop=4;
+	fi;
+
+#	[[ $v_verbose -ge 1 ]] && (echo "google querying for '$query'");
+#	[[ $v_verbose -gt 1 ]] && (echo "page size: $g_rpp, no of pages: $g_nop");
+
+	while [[ $pageN -lt $g_nop ]] && [[ $hasNext -ne 0 ]]  && [[ $gotAll -ne 1 ]]; do
+		pageQuery="start=$((pageN++))&num=$g_rpp";
+#		[[ $v_verbose -gt 1 ]] && (echo "current pageQuery:: $pageQuery");
+
+		oFile="$(google_srch $query $pageQuery)";
+#		[[ $v_verbose -ge 1 ]] && (echo "got outfile: $oFile");
+
+		c="$(analyse $oFile)";  # returns tuple (hasNext,gotAll) values after analyse 
+		
+		[[ -z "$c" ]] && break;
+		hasNext=$(echo $c | cut -d, -f1);
+		gotAll=$(echo $c | cut -d, -f2);
+		
+#		[[ $v_verbose -gt 1 ]] && (echo "hasNext: $hasNext, gotAll: $gotAll");
+#		[[ $v_verbose -ge 1 ]] && (echo "going to sleep for $v_delay sec, before continue");
+		sleep $v_delay;
+	done;
+}
+
+while [[ $# -gt 0 ]]; do
+	case $1 in 
+		-h|--help)
+			help;
+			;;
+		-w|--delay|--wait)
+			shift;
+			case $1 in 
+				0)
+					v_delay=0;
+					shift;
+					;;
+				+([0-9])s)
+					v_delay="${1%%s}";
+					shift;
+					;;
+				+([0-9])m)
+					v_delay="$((${1%%m}*60))";
+					;;
+				*)
+					echo "ERROR: invalid '$1' delay value.";
+					exit -1;
+					;;
+			esac;
+			;;
+		-t|--target)
+			shift;
+			case $1 in
+				-d|--domain)
+					t_tar=1;
+					t_domain="$2";
+					shift;
+					shift;
+					;;
+				-p|--people)
+					# TODO: integrate more options here later
+					t_tar=2;
+					t_people="$2";
+					shift;
+					shift;
+					;;
+				-r|--raw)
+					t_tar=3;
+					shift;
+					;;
+			esac;
+			;;
+		-g|--google)
+			shift;
+			flag=0;
+			s_google=1;
+			while [[ $flag -eq 0 ]]; do
+				case $1 in
+					--dork)  			# do not guess use this exact query to search target
+						g_query="$2";
+						g_pre_q=1;
+						shift;
+						shift;
+						;;
+					-s|--search)			# do not guess use these keywords to search target
+						g_query="$2";
+						g_pre_q=0;
+						shift;
+						shift;
+						;;
+					-G|--guess)			# combine guess result also with (dork|search) results
+						g_guess="1";
+						shift;
+						;;
+					-p|--pages)			
+						g_nop=$2;
+						shift;
+						shift;
+						;;
+					-n|--psize)
+						g_rpp=$2;
+						shift;
+						shift;
+						;;
+					-t|--stop)
+						g_tr=$2;
+						shift;
+						shift;
+						;;
+					*)
+						flag=1;
+						;;
+				esac;
+			done;
+			;;
+		-r|--re)
+			shift;
+			flag=0;
+			while [[ $flag -eq 0 ]]; do
+				case $1 in 
+					-m|--mail)
+						re_mail="$2";
+						shift;
+						shift;
+						;;
+					-d|--domain)
+						re_domain="$2";
+						shift;
+						shift;
+						;;
+					-c|--mob)
+						re_mod="$2";
+						shift;
+						shift;
+						;;
+					--raw)
+						re_raw="$2";
+						shift;
+						shift;
+						;;
+					*)
+						flag=1;
+						;;
+				esac;
+			done;
+			;;
+		-=)
+			shift;
+			while [[ "$1" != "-=" ]]; do
+				b_opts="$b_opts $1";
+				shift;
+			done;
+			shift;
+			;;
+		-e|--extract)
+			shift;
+			flag=0;	
+			while [[ $flag -eq 0 ]]; do
+				case $1 in
+					-d|--domain)
+						e_domain=1;
+						shift;
+						;;
+					-m|--mail)
+						e_email=1;
+						shift;
+						;;
+					-c|--mob)
+						e_mob=1;
+						shift;
+						;;
+					-u|--url)
+						e_url=1;
+						shift;
+						;;
+					-r|--raw)
+						e_raw=1;
+						shift;
+						;;
+					*)
+						flag=1;
+						;;
+				esac;
+			done;
+			;;
+		-H|--harvest)
+			shift;
+			flag=0;
+			while [[ $flag -eq 0 ]]; do
+				case $1 in 
+					--snaps)
+						h_snaps=1;
+						shift;
+						;;
+					--subdomain)
+						h_subd=1;
+						o_subd_file="$2";
+						shift;
+						shift;
+						;;
+					*)
+						flag=1;
+						;;
+				esac;
+			done;
+			;;
+		-o|--out)
+			o_file="$2";
+			shift;
+			shift;
+			;;
+		-v|--verbose)
+			shift;
+			v_verbose=$((++v_verbose));
+			;;
+		*)
+			echo "ERROR: $1 not defined";
+			exit -1;
+			;;
+	esac;
+done;
+
+# if no query is provided then guess anyways
+if [[ x"$g_query" == "x" ]]; then
+#	[[ $v_verbose -ge 1 ]] && (echo "No queries provided enabling guess");
+	g_guess=1;
+#	[[ $v_verbose -gt 1 ]] && (echo "g_guess:: $g_guess");
+fi;
+
+if ! [[ $t_tar -gt 0 ]]; then
+	echo "ERROR: Target is not defined";
+	exit -1;
+fi;
+
+if [[ $s_google -eq 1 ]]; then
+	# without guess
+	if [[ $g_guess -eq 0 ]]; then
+		if [[ $g_pre_q -eq 1 ]]; then
+			google "$(queryEnc "$g_query")";
+		else
+			case $t_tar in
+				1)
+					google "$(queryEnc "$g_query")+site%3A$(queryEnc "$t_domain")";
+					;;
+				2|3)
+					google "$(queryEnc "$g_query")";
+					;;
+			esac;
+		fi;
+	fi;
+	# guess also
+	[[ $g_guess -eq 1 ]] && case $t_tar in
+		1)
+			google "site%3A$(queryEnc "$t_domain")+-www*";
+			;;
+		2)
+			google "$(queryEnc "$t_people")+site%3Afacebook.com";
+			google "$(queryEnc "$t_people")+site%3Alinkedin.com";
+			google "$(queryEnc "$t_people")+site%3Atwitter.com";
+			google "$(queryEnc "$t_people")+site%3Ainstagram.com";
+			;;
+	esac;
+fi;
+
+#extract info from pages
+# harvest
+
+# end section, could be controlled using trap
+[[ $FLAG_EXTGLOB_DISABLED -eq 1 ]] && shopt -u extglob;
+
