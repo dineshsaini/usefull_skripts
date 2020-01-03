@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-v_browser="0";		# which browser to use (0 => wget, 1=> curl)
+#v_browser="0";		# which browser to use (0 => wget, 1=> curl)
 b_opts="";		# use -= [pass options] -= to pass options to browser, this will give higer control
 			# of browser to user, will be good at later.
 
@@ -37,6 +37,7 @@ o_subd_file="";		# save subdomains in this
 
 v_delay="1";		# min. delay between requests values (0,\[0-9]+[sm]\)
 v_verbose=0;		# be verbose
+v_count=0;		# current results count
 
 FLAG_EXTGLOB_DISABLED=$(shopt | grep "extglob" | grep "off$" | wc -l);
 
@@ -66,29 +67,29 @@ function queryEnc {
 # $2 => outfile (if not, create tempfile and return the location, after operation)
 # return => outfile location or error code as retured from command.
 # TODO: FIXME: need to work on browse
-function browse {
-	url="$1";
-	if [[ x"$url" == "x" ]]; then
-		echo -1;
-		return;
-	fi;
-
-	oFile="$( ([[ x"$2" == "x" ]] && tempfile) || echo $2)";
-	retval=0;
-	if [[ $v_browser -eq 0 ]]; then
-		wget $b_opts -q $url -O $oFile ;
-		retval="$?";
-	else
-		curl $b_opts -s $url -o $oFile;
-		retval="$?";
-	fi;	
-	
-	if [[ $retval -eq 0 ]]; then
-		echo "$oFile";	
-	else
-		echo "$retval";
-	fi;
-}
+#function browse {
+#	url="$1";
+#	if [[ x"$url" == "x" ]]; then
+#		echo -1;
+#		return;
+#	fi;
+#
+#	oFile="$( ([[ x"$2" == "x" ]] && tempfile) || echo $2)";
+#	retval=0;
+#	if [[ $v_browser -eq 0 ]]; then
+#		wget $b_opts -q $url -O $oFile ;
+#		retval="$?";
+#	else
+#		curl $b_opts -s $url -o $oFile;
+#		retval="$?";
+#	fi;	
+#	
+#	if [[ $retval -eq 0 ]]; then
+#		echo "$oFile";	
+#	else
+#		echo "$retval";
+#	fi;
+#}
 
 
 # $1 => query (required) 
@@ -156,17 +157,90 @@ function google_srch {
 #	[[ $v_verbose -gt 1 ]] && (echo "returning file: $oFile");
 	echo $oFile;
 }
+
+function getList {
+	htmlPage="$1";
+	outPage="$2";
+	retval="$( (/usr/bin/env perl -)< <(cat <<__END__
+	use v5.28.1;
+	use strict;
+	use warnings;
+	use Mojo::DOM;
+	use Mojo::File;
+	
+	my \$htmlPage = "$htmlPage";
+	my \$outFile = "$outPage";
+	my \$hasNext = 1;
+	my \$rcount = 0;
+	
+	sub processHTML {	
+		my \$file = Mojo::File->new(\$htmlPage);
+		my \$doc = Mojo::DOM->new(\$file->slurp);
+		my \$fd;
+		open(\$fd, '>', \$outFile) or return "0,0";
+	
+		for my \$i (\$doc->find('#main>div')->each) {
+			my \$j = Mojo::DOM->new(\$i);
+			for my \$k (\$j->find('a[href^="/url?q="]')->each) {
+				\$rcount++;
+				my \$link = \$k->{href};
+				\$link =~ s/&.*\$//;
+				\$link =~ s/^\/url\?q=//;
+				my \$title = \$k->children->first->all_text;
+				my \$summary = \$k->parent->next->next->all_text;
+				\$summary =~ s/\\n/ /g;
+				# say "link >> \$link";
+				# say "title >> \$title";
+				# say "summary >> \$summary";		
+				print \$fd "\$title\n\$link\n\$summary\n";
+			}
+		}
+		close \$fd;
+	
+		my \$foot = "";
+		for my \$i (\$doc->find('#main footer')->each){
+			\$foot.=\$i->all_text;
+		}
+		\$hasNext = 0 if \$foot !~ /Next >/ ;
+	
+		return "\$hasNext,\$rcount";
+	}
+	my \$r=processHTML;
+	say \$r;
+__END__
+	) )";
+	echo $retval;
+}
+
+function filter {
+	file="$1";
+	trec="$2";
+	
+	echo "processed $trec records from $file file." > $o_file;
+
+}
+
 function analyse {
 	page=$1;
 	hasNext=1;
 	gotAll=0;
-	
-#	[[ $v_verbose -ge 1 ]] && (echo "analysing: $page");
-	
-	echo $page >> $o_file;
-	
-#	[[ $v_verbose -ge 1 ]] && (echo "done analysing: $page");
+	tResults=$(tempfile);	
 
+#	[[ $v_verbose -ge 1 ]] && (echo "analysing: $page");
+
+	r=$(getList $page $tResults);
+
+#	[[ $v_verbose -ge 1 ]] && (echo "done analysing: $page");
+	
+	hasNext=$(echo $r | cut -d, -f1);
+	rcount=$(echo $r | cut -d, -f2);
+
+	if [[  $g_tr -ne -1 ]] && [[ $(($v_count + $rcount)) -ge $g_tr ]]; then
+		rcount=$(($g_tr-$v_count));
+		gotAll=1;
+	fi;
+
+	filter $tResults $rcount;
 	echo "$hasNext,$gotAll";
 }
 
