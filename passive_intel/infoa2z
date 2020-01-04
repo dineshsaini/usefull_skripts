@@ -62,67 +62,27 @@ function queryEnc {
 		-e 's/>/%3E/g');
 }
 
-
-# $1 => url (required)
-# $2 => outfile (if not, create tempfile and return the location, after operation)
-# return => outfile location or error code as retured from command.
-# TODO: FIXME: need to work on browse
-#function browse {
-#	url="$1";
-#	if [[ x"$url" == "x" ]]; then
-#		echo -1;
-#		return;
-#	fi;
-#
-#	oFile="$( ([[ x"$2" == "x" ]] && tempfile) || echo $2)";
-#	retval=0;
-#	if [[ $v_browser -eq 0 ]]; then
-#		wget $b_opts -q $url -O $oFile ;
-#		retval="$?";
-#	else
-#		curl $b_opts -s $url -o $oFile;
-#		retval="$?";
-#	fi;	
-#	
-#	if [[ $retval -eq 0 ]]; then
-#		echo "$oFile";	
-#	else
-#		echo "$retval";
-#	fi;
-#}
-
-
 # $1 => query (required) 
 # $2 => page navigation query string (required)
 # $3 => file 
 # returns response file location
 function google_srch {
-	query="$1";
-#	[[ $v_verbose -ge 1 ]] && (echo "got query: $query");
+	local query="$1";
 	if [[ x"$query" == "x" ]]; then
-#		[[ $v_verbose -ge 1 ]] && (echo "recieved null  query, exiting");
 		echo "-1";
 		return;
 	fi;
 	
-	nqstr="$2";
-#	[[ $v_verbose -ge 1 ]] && (echo "got query params: $nqstr");
+	local nqstr="$2";
 	if [[ x"$nqstr" == "x" ]]; then
-#		[[ $v_verbose -ge 1 ]] && (echo "recieved null  query params, exiting");
 		echo "-2";
 		return;
 	fi;
 
-	gws="https://www.google.com";
-	url="$gws/search?gbv=1&sei=rlcLXr_JAdXE4-EP6oOmcA&q=$query&$nqstr";
-
-	oFile="$( ([[ x"$3" == "x" ]] && tempfile) || echo $3)";
-#	cFile="$(tempfile)";
-	tFile="$(tempfile)";
-
-#	[[ $v_verbose -ge 1 ]] && (echo "using url: $url");
-#	[[ $v_verbose -ge 1 ]] && (echo "using out file: $oFile");
-#	[[ $v_verbose -gt 1 ]] && (echo "wget user options found : $b_opts");
+	local gws="https://www.google.com";
+	local url="$gws/search?gbv=1&sei=rlcLXr_JAdXE4-EP6oOmcA&q=$query&$nqstr";
+	local oFile="$( ([[ x"$3" == "x" ]] && tempfile) || echo $3)";
+	local tFile="$(tempfile)";
 
 	wget "$url" --header='Host: www.google.com' \
 		--header='User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0' \
@@ -138,30 +98,23 @@ function google_srch {
 		--header='TE: Trailers' \
 		-O $tFile \
 		--quiet $b_opts ;
-	retval=$?;
-#	[[ $v_verbose -gt 1 ]] && (echo "wget return status: $retval");
+	local retval=$?;
 	if [[ $retval -ne 0 ]]; then
-#		[[ $v_verbose -ge 1 ]] && (echo "wget return error, exiting");
 		echo $retval;
 		return;
 	fi;
-#	if [[ x"$cFile" != "x" ]]; then
-#		rm -f $cFile;
-#	fi;
 
 	if [[ x"$tFile" != "x" ]]; then
-#		[[ $v_verbose -ge 1 ]] && (echo "uncompressing recieved output");
 		cat $tFile | gunzip > $oFile;
 		rm -f $tFile;
 	fi;
-#	[[ $v_verbose -gt 1 ]] && (echo "returning file: $oFile");
 	echo $oFile;
 }
 
 function getList {
-	htmlPage="$1";
-	outPage="$2";
-	retval="$( (/usr/bin/env perl -)< <(cat <<__END__
+	local htmlPage="$1";
+	local outPage="$2";
+	local retval="$( (/usr/bin/env perl -)< <(cat <<__END__
 	use v5.28.1;
 	use strict;
 	use warnings;
@@ -188,7 +141,7 @@ function getList {
 				\$link =~ s/^\/url\?q=//;
 				my \$title = \$k->children->first->all_text;
 				my \$summary = \$k->parent->next->next->all_text;
-				\$summary =~ s/\\n/ /g;
+				\$summary =~ s/\n/ /g;
 				# say "link >> \$link";
 				# say "title >> \$title";
 				# say "summary >> \$summary";		
@@ -212,44 +165,53 @@ __END__
 	echo $retval;
 }
 
-function filter {
-	file="$1";
-	trec="$2";
-	
-	echo "processed $trec records from $file file." > $o_file;
-
-}
-
 function analyse {
-	page=$1;
-	hasNext=1;
-	gotAll=0;
-	tResults=$(tempfile);	
+	local page=$1;
+	local hasNext=1;
+	local gotAll=0;
+	local cFile=$2;
 
-#	[[ $v_verbose -ge 1 ]] && (echo "analysing: $page");
+	local tResults=$(tempfile);	
 
-	r=$(getList $page $tResults);
+	local r=$(getList $page $tResults);
 
-#	[[ $v_verbose -ge 1 ]] && (echo "done analysing: $page");
-	
 	hasNext=$(echo $r | cut -d, -f1);
-	rcount=$(echo $r | cut -d, -f2);
+	local rcount=$(echo $r | cut -d, -f2);
 
 	if [[  $g_tr -ne -1 ]] && [[ $(($v_count + $rcount)) -ge $g_tr ]]; then
 		rcount=$(($g_tr-$v_count));
 		gotAll=1;
 	fi;
 
-	filter $tResults $rcount;
+	local i=0;
+	local c=0;
+	while IFS= read -r line; do
+		if [[ $c -le $rcount ]]; then
+			case $(( $((++i)) % 3 )) in 
+				1)
+					echo "$line" >> $cFile;
+					;;
+				2)
+					echo "$line" >> $cFile;
+					;;
+				0)
+					(( ++c ));
+					echo "$line" >> $cFile;
+					;;
+			esac;
+		else
+			break;
+		fi;
+	done < $tResults;
 	echo "$hasNext,$gotAll";
 }
 
-
 function google {
-	query="$1";
-	pageN=0;
-	hasNext=1;
-	gotAll=0;
+	local query="$1";
+	local pageN=0;
+	local hasNext=1;
+	local gotAll=0;
+	local lFile="$( ([[ x"$2" == "x" ]] && tempfile) || echo $2)";
 
 	case $(($g_rpp/10)) in
 		1)
@@ -277,27 +239,103 @@ function google {
 	if [[ $g_nop -le 0 ]]; then
 		$g_nop=4;
 	fi;
-
-#	[[ $v_verbose -ge 1 ]] && (echo "google querying for '$query'");
-#	[[ $v_verbose -gt 1 ]] && (echo "page size: $g_rpp, no of pages: $g_nop");
-
+	
 	while [[ $pageN -lt $g_nop ]] && [[ $hasNext -ne 0 ]]  && [[ $gotAll -ne 1 ]]; do
-		pageQuery="start=$((pageN++))&num=$g_rpp";
-#		[[ $v_verbose -gt 1 ]] && (echo "current pageQuery:: $pageQuery");
+		local pageQuery="start=$((pageN++))&num=$g_rpp";
 
-		oFile="$(google_srch $query $pageQuery)";
-#		[[ $v_verbose -ge 1 ]] && (echo "got outfile: $oFile");
-
-		c="$(analyse $oFile)";  # returns tuple (hasNext,gotAll) values after analyse 
+		local oFile="$(google_srch $query $pageQuery)";
+		local c="$(analyse $oFile $lFile)";  # returns tuple (hasNext,gotAll) values after analyse 
 		
 		[[ -z "$c" ]] && break;
 		hasNext=$(echo $c | cut -d, -f1);
 		gotAll=$(echo $c | cut -d, -f2);
 		
-#		[[ $v_verbose -gt 1 ]] && (echo "hasNext: $hasNext, gotAll: $gotAll");
-#		[[ $v_verbose -ge 1 ]] && (echo "going to sleep for $v_delay sec, before continue");
 		sleep $v_delay;
 	done;
+	echo $lFile;
+}
+
+function search {
+	local resFile="$(tempfile)";
+
+	if [[ $s_google -eq 1 ]]; then
+		# without guess
+		if [[ $g_guess -eq 0 ]]; then
+			if [[ $g_pre_q -eq 1 ]]; then
+				resFile=$(google "$(queryEnc "$g_query")" $resFile);
+			else
+				case $t_tar in
+					1)
+						resFile=$(google "$(queryEnc "$g_query")+site%3A$(queryEnc "$t_domain")" $resFile);
+						;;
+					2|3)
+						resFile=$(google "$(queryEnc "$g_query")" $resFile);
+						;;
+				esac;
+			fi;
+		fi;
+		# guess also
+		[[ $g_guess -eq 1 ]] && case $t_tar in
+			1)
+				resFile=$(google "site%3A$(queryEnc "$t_domain")+-www*" $resFile);
+				;;
+			2)
+				resFile=$(google "$(queryEnc "$t_people")+site%3Afacebook.com" $resFile);
+				resFile=$(google "$(queryEnc "$t_people")+site%3Alinkedin.com" $resFile);
+				resFile=$(google "$(queryEnc "$t_people")+site%3Atwitter.com" $resFile);
+				resFile=$(google "$(queryEnc "$t_people")+site%3Ainstagram.com" $resFile);
+				;;
+		esac;
+	fi;
+	echo $resFile;
+}
+
+function filter {
+	local l="$1";
+	local c=$2;
+	local r="";
+	case $c in 
+		1)
+			echo "name from title";
+			;;
+		2)
+			echo "domain from url";
+			;;
+		3)
+			echo "subdomain from url";
+			;;
+		4)
+			echo "mob from summary";
+			;;
+		5)
+			echo "mail from summary";
+			;;
+		6)
+			echo "raw search on input";
+			;;
+	esac;
+	echo "$r";
+}
+
+function harvest {
+	local rFile=$1;
+	local i=0;
+
+	while IFS= read -r line; do
+		case $(( $((++i)) % 3 )) in 
+			1)
+				echo "$line" >> $o_file;
+				;;
+			2)
+				echo "$line";
+				echo "$line" >> $o_file;
+				;;
+			0)
+				(( ++c ));
+				echo "$line" >> $o_file;
+				;;
+		esac;
+	done < $rFile;
 }
 
 while [[ $# -gt 0 ]]; do
@@ -499,9 +537,7 @@ done;
 
 # if no query is provided then guess anyways
 if [[ x"$g_query" == "x" ]]; then
-#	[[ $v_verbose -ge 1 ]] && (echo "No queries provided enabling guess");
 	g_guess=1;
-#	[[ $v_verbose -gt 1 ]] && (echo "g_guess:: $g_guess");
 fi;
 
 if ! [[ $t_tar -gt 0 ]]; then
@@ -509,38 +545,7 @@ if ! [[ $t_tar -gt 0 ]]; then
 	exit -1;
 fi;
 
-if [[ $s_google -eq 1 ]]; then
-	# without guess
-	if [[ $g_guess -eq 0 ]]; then
-		if [[ $g_pre_q -eq 1 ]]; then
-			google "$(queryEnc "$g_query")";
-		else
-			case $t_tar in
-				1)
-					google "$(queryEnc "$g_query")+site%3A$(queryEnc "$t_domain")";
-					;;
-				2|3)
-					google "$(queryEnc "$g_query")";
-					;;
-			esac;
-		fi;
-	fi;
-	# guess also
-	[[ $g_guess -eq 1 ]] && case $t_tar in
-		1)
-			google "site%3A$(queryEnc "$t_domain")+-www*";
-			;;
-		2)
-			google "$(queryEnc "$t_people")+site%3Afacebook.com";
-			google "$(queryEnc "$t_people")+site%3Alinkedin.com";
-			google "$(queryEnc "$t_people")+site%3Atwitter.com";
-			google "$(queryEnc "$t_people")+site%3Ainstagram.com";
-			;;
-	esac;
-fi;
-
-#extract info from pages
-# harvest
+harvest "$(search)";
 
 # end section, could be controlled using trap
 [[ $FLAG_EXTGLOB_DISABLED -eq 1 ]] && shopt -u extglob;
