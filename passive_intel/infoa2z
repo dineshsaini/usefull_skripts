@@ -33,13 +33,13 @@ h_snaps="0";		# harvest snapshot of urls ## only if e_url is 1
 r_freq="0";		# report frequecy of occurence of domain
 
 o_file="";		# output file to use
-o_subd_file="";		# save subdomains in this
+o_subd_file="";		# save subdomains in this, use - to provide default file
 
 v_delay="1";		# min. delay between requests values (0,\[0-9]+[sm]\)
 v_verbose=0;		# be verbose
 v_count=0;		# current results count
 
-FLAG_EXTGLOB_DISABLED=$(shopt | grep "extglob" | grep "off$" | wc -l);
+FLAG_EXTGLOB_DISABLED=$(shopt | grep "^extglob" | grep "off$" | wc -l);
 
 [[ $FLAG_EXTGLOB_DISABLED -eq 1 ]] && shopt -s extglob;
 
@@ -78,13 +78,17 @@ function google_srch {
 		echo "-2";
 		return;
 	fi;
-
 	local gws="https://www.google.com";
+	local host="www.google.com";
+	if [[ x"$3" == "x1" ]]; then
+		gws="http://webcache.googleusercontent.com";
+		host="webcache.googleusercontent.com";
+	fi;
 	local url="$gws/search?gbv=1&sei=rlcLXr_JAdXE4-EP6oOmcA&q=$query&$nqstr";
-	local oFile="$( ([[ x"$3" == "x" ]] && tempfile) || echo $3)";
+	local oFile="$(tempfile)";
 	local tFile="$(tempfile)";
 
-	wget "$url" --header='Host: www.google.com' \
+	wget "$url" --header="'Host: $host'" \
 		--header='User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0' \
 		--header='Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
 		--header='Accept-Language: en-US,en;q=0.5' \
@@ -109,6 +113,11 @@ function google_srch {
 		rm -f $tFile;
 	fi;
 	echo $oFile;
+}
+
+function snapshot {
+	sfile=$(google_srch "$(queryEnc "cache:$1")" "oq=&aqs=" 1);
+	echo $sfile;
 }
 
 function getList {
@@ -244,6 +253,7 @@ function google {
 		local pageQuery="start=$((pageN++))&num=$g_rpp";
 
 		local oFile="$(google_srch $query $pageQuery)";
+		[[ $(echo $oFile | grep "^/tmp/" | wc -l) -eq 0 ]] && break;  # got error, exit
 		local c="$(analyse $oFile $lFile)";  # returns tuple (hasNext,gotAll) values after analyse 
 		
 		[[ -z "$c" ]] && break;
@@ -293,49 +303,103 @@ function search {
 function filter {
 	local l="$1";
 	local c=$2;
-	local r="";
-	case $c in 
-		1)
-			echo "name from title";
-			;;
-		2)
-			echo "domain from url";
-			;;
-		3)
-			echo "subdomain from url";
-			;;
-		4)
-			echo "mob from summary";
-			;;
-		5)
-			echo "mail from summary";
-			;;
-		6)
-			echo "raw search on input";
-			;;
-	esac;
+	local r="$l";
+#	case $c in 
+#		1)
+#			echo "name from title";
+#			;;
+#		2)
+#			echo "domain from url";
+#			;;
+#		3)
+#			echo "subdomain from url";
+#			;;
+#		4)
+#			echo "mob from summary";
+#			;;
+#		5)
+#			echo "mail from summary";
+#			;;
+#		6)
+#			if [[ x"$re_raw" == "x" ]]; then
+#				echo "error: regex is not defined";
+#			else
+#				echo "raw search on input";
+#			fi;
+#			;;
+#	esac;
 	echo "$r";
 }
 
 function harvest {
 	local rFile=$1;
 	local i=0;
+	local snapdir="$(dirname $o_file)/snaps";
 
+	if [[ $h_snaps -eq 1 ]]; then
+		mkdir -p $snapdir; 
+	fi;
+	echo '<?xml version="1.0"?>' >$o_file;
+	echo '<records>' >>$o_file;
 	while IFS= read -r line; do
+		[[ $(( $i % 3 )) -eq 0 ]] && (echo '<record>' >>$o_file);
 		case $(( $((++i)) % 3 )) in 
 			1)
-				echo "$line" >> $o_file;
+				if [[ $t_tar -eq 2 ]]; then
+					echo "<title>$(filter "$line" 1)</title>" >> $o_file;
+				fi;
+				if [[ $t_tar -eq 3 ]] && [[ $e_raw -eq 1 ]]; then
+					echo "<raw1>$(filter "$line" 6)</raw1>" >> $o_file;
+				fi;
 				;;
 			2)
-				echo "$line";
-				echo "$line" >> $o_file;
+				if [[ $e_url -eq 1 ]]; then
+					echo "<url>$line</url>" >> $o_file;
+				fi;
+
+				if [[ $t_tar -ne 2 ]] && [[ $e_domain -eq 1 ]]; then
+					echo "<domain>$(filter "$line" 2)</domain>" >> $o_file;
+				fi;
+
+				if [[ $h_subd -eq 1 ]]; then
+					if [[ x"$o_subd_file" == "x-" ]] || [[ x"$o_subd_file" == "" ]]; then
+						echo "$(filter "$line" 3)" >> $o_file.subdomain.dic;
+					else
+						echo "$(filter "$line" 3)" >> $o_subd_file;
+					fi;
+				fi;
+
+				if [[ $t_tar -eq 3 ]] && [[ $e_raw -eq 1 ]]; then
+					echo "<raw2>$(filter "$line" 6)</raw2>" >> $o_file;
+				fi;
+
+				if [[ $h_snaps -eq 1 ]]; then
+					local sfile=$(snapshot $line);
+					echo "######### snap file: $sfile";
+					if [[ $(echo "$sfile" |grep "^/tmp/" | wc -l) -eq 1 ]]; then
+						mv $sfile $snapdir;
+						fname=$(basename $sfile);
+						echo "<snapshot>$snapdir/$fname</snapshot>" >> $o_file;
+					fi;
+				fi;
 				;;
 			0)
-				(( ++c ));
-				echo "$line" >> $o_file;
+				if [[ $e_email -eq 1 ]]; then
+					echo "<email>$(filter "$line" 5)</email>" >> $o_file;
+				fi;
+				
+				if [[ $e_mob -eq 1 ]]; then
+					echo "<contact>$(filter "$line" 4)</contact>" >> $o_file;
+				fi;
+
+				if [[ $t_tar -eq 3 ]] && [[ $e_raw -eq 1 ]]; then
+					echo "<raw3>$(filter "$line" 6)</raw3>" >> $o_file;
+				fi;
 				;;
 		esac;
+		[[ $(( $i % 3 )) -eq 0 ]] && (echo '</record>' >>$o_file);
 	done < $rFile;
+	echo '</records>' >>$o_file;
 }
 
 while [[ $# -gt 0 ]]; do
@@ -467,7 +531,7 @@ while [[ $# -gt 0 ]]; do
 			done;
 			shift;
 			;;
-		-e|--extract)
+		-H|--harvest)
 			shift;
 			flag=0;	
 			while [[ $flag -eq 0 ]]; do
@@ -492,25 +556,25 @@ while [[ $# -gt 0 ]]; do
 						e_raw=1;
 						shift;
 						;;
-					*)
-						flag=1;
-						;;
-				esac;
-			done;
-			;;
-		-H|--harvest)
-			shift;
-			flag=0;
-			while [[ $flag -eq 0 ]]; do
-				case $1 in 
-					--snaps)
-						h_snaps=1;
+					-S|--snaps)
+						h_snaps=1; # only for urls and if url harvest is on
 						shift;
 						;;
-					--subdomain)
+					-s|--subdomain)
 						h_subd=1;
 						o_subd_file="$2";
 						shift;
+						shift;
+						;;
+					-a|--all)
+						e_domain=1;
+						e_email=1;
+						e_mob=1;
+						e_url=1;
+						e_raw=1;
+						h_snaps=1;
+						h_subd=1;
+						o_subd_file="-";
 						shift;
 						;;
 					*)
