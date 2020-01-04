@@ -4,6 +4,7 @@
 b_opts="";		# use -= [pass options] -= to pass options to browser, this will give higer control
 			# of browser to user, will be good at later.
 
+re_type="2";		# type of regex; fixed(1), basic(2)[default], extended(3), PCRE(4)
 re_mail="";		# regex to be used to find emails.
 re_domain="";		# regex to be used to find domains.
 re_mob="";		# regex to be used to find contacts.
@@ -303,31 +304,106 @@ function search {
 function filter {
 	local l="$1";
 	local c=$2;
-	local r="$l";
-#	case $c in 
-#		1)
-#			echo "name from title";
-#			;;
-#		2)
-#			echo "domain from url";
-#			;;
-#		3)
-#			echo "subdomain from url";
-#			;;
-#		4)
-#			echo "mob from summary";
-#			;;
-#		5)
-#			echo "mail from summary";
-#			;;
-#		6)
-#			if [[ x"$re_raw" == "x" ]]; then
-#				echo "error: regex is not defined";
-#			else
-#				echo "raw search on input";
-#			fi;
-#			;;
-#	esac;
+	local r="";
+	case $c in 
+		1)
+			local p="$(echo "$t_people" | sed -e 's/[[:space:]]\+/ /g' -e 's/ /.*?/g')";
+			r="$(echo "$l" | grep -P -o "$p")";
+			
+			if [[ $(echo "$r" | wc -l) -eq 0 ]]; then
+				p="$(echo "$t_people" | sed -e 's/[[:space:]]\+/ /g' -e 's/ /.*/g')";
+				r="$(echo "$l" | grep -P -o "$p")";
+			fi;
+			;;
+		2)
+			if [[ x"$re_domain" != "x" ]]; then
+				case $re_type in 
+					1)
+						r="$(echo "$l" | grep -F -o "$re_domain")";
+						;;
+					2)
+						r="$(echo "$l" | grep -G -o "$re_domain")";
+						;;
+					3)
+						r="$(echo "$l" | grep -E -o "$re_domain")";
+						;;
+					4)
+						r="$(echo "$l" | grep -P -o "$re_domain")";
+						;;
+				esac;
+			else
+				r="$(echo "$l" | sed -e 's/^\(\(ht\|f\)tp\(s\)\?\)\?\(:\)\?\(\/\)\?\(\/\)\?//' \
+				-e 's/\/.*//')";
+			fi;
+			;;
+		3)
+			r="$(echo "$l" | sed -e 's/^\(\(ht\|f\)tp\(s\)\?\)\?\(:\)\?\(\/\)\?\(\/\)\?//' \
+				-e 's/\/.*//' \
+				-e 's/^\(www\.\)//' \
+				-e 's/\.[^.]*\.[^.]*$//')";
+			;;
+		4)
+			if [[ x"$re_mob" != "x" ]]; then
+				case $re_type in 
+					1)
+						r="$(echo "$l" | grep -F -o "$re_mob")";
+						;;
+					2)
+						r="$(echo "$l" | grep -G -o "$re_mob")";
+						;;
+					3)
+						r="$(echo "$l" | grep -E -o "$re_mob")";
+						;;
+					4)
+						r="$(echo "$l" | grep -P -o "$re_mob")";
+						;;
+				esac;
+			else
+				r="$(echo "$l" | grep -o '\(([0-9]\{3\})\|[0-9]\{3\}\)[ -]\?[0-9]\{3\}[ -]\?[0-9]\{4\}')";
+			fi;
+			;;
+		5)	
+			if [[ x"$re_mail" != "x" ]]; then
+				case $re_type in 
+					1)
+						r="$(echo "$l" | grep -F -o "$re_mail")";
+						;;
+					2)
+						r="$(echo "$l" | grep -G -o "$re_mail")";
+						;;
+					3)
+						r="$(echo "$l" | grep -E -o "$re_mail")";
+						;;
+					4)
+						r="$(echo "$l" | grep -P -o "$re_mail")";
+						;;
+				esac;
+
+			else
+				r="$(echo "$l" | grep -E -o "\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,6}\b")";
+			fi;
+			;;
+		6)
+			if [[ x"$re_raw" == "x" ]]; then
+				r="error: regex is not defined";
+			else
+				case $re_type in 
+					1)
+						r="$(echo "$l" | grep -F -o "$re_raw")";
+						;;
+					2)
+						r="$(echo "$l" | grep -G -o "$re_raw")";
+						;;
+					3)
+						r="$(echo "$l" | grep -E -o "$re_raw")";
+						;;
+					4)
+						r="$(echo "$l" | grep -P -o "$re_raw")";
+						;;
+				esac;
+			fi;
+			;;
+	esac;
 	echo "$r";
 }
 
@@ -346,10 +422,10 @@ function harvest {
 		case $(( $((++i)) % 3 )) in 
 			1)
 				if [[ $t_tar -eq 2 ]]; then
-					echo "<title>$(filter "$line" 1)</title>" >> $o_file;
+					echo "<title>$(filter "$line" 1 | tr '\n' '|' | sed 's/|$//')</title>" >> $o_file;
 				fi;
 				if [[ $t_tar -eq 3 ]] && [[ $e_raw -eq 1 ]]; then
-					echo "<raw1>$(filter "$line" 6)</raw1>" >> $o_file;
+					echo "<raw1>$(filter "$line" 6 | tr '\n' '|' | sed 's/|$//')</raw1>" >> $o_file;
 				fi;
 				;;
 			2)
@@ -358,7 +434,7 @@ function harvest {
 				fi;
 
 				if [[ $t_tar -ne 2 ]] && [[ $e_domain -eq 1 ]]; then
-					echo "<domain>$(filter "$line" 2)</domain>" >> $o_file;
+					echo "<host>$(filter "$line" 2 | tr '\n' '|' | sed 's/|$//')</host>" >> $o_file;
 				fi;
 
 				if [[ $h_subd -eq 1 ]]; then
@@ -370,12 +446,11 @@ function harvest {
 				fi;
 
 				if [[ $t_tar -eq 3 ]] && [[ $e_raw -eq 1 ]]; then
-					echo "<raw2>$(filter "$line" 6)</raw2>" >> $o_file;
+					echo "<raw2>$(filter "$line" 6 | tr '\n' '|' | sed 's/|$//')</raw2>" >> $o_file;
 				fi;
 
 				if [[ $h_snaps -eq 1 ]]; then
 					local sfile=$(snapshot $line);
-					echo "######### snap file: $sfile";
 					if [[ $(echo "$sfile" |grep "^/tmp/" | wc -l) -eq 1 ]]; then
 						mv $sfile $snapdir;
 						fname=$(basename $sfile);
@@ -385,15 +460,15 @@ function harvest {
 				;;
 			0)
 				if [[ $e_email -eq 1 ]]; then
-					echo "<email>$(filter "$line" 5)</email>" >> $o_file;
+					echo "<email>$(filter "$line" 5 | tr '\n' '|' | sed 's/|$//')</email>" >> $o_file;
 				fi;
 				
 				if [[ $e_mob -eq 1 ]]; then
-					echo "<contact>$(filter "$line" 4)</contact>" >> $o_file;
+					echo "<contact>$(filter "$line" 4 | tr '\n' '|' | sed 's/|$//')</contact>" >> $o_file;
 				fi;
 
 				if [[ $t_tar -eq 3 ]] && [[ $e_raw -eq 1 ]]; then
-					echo "<raw3>$(filter "$line" 6)</raw3>" >> $o_file;
+					echo "<raw3>$(filter "$line" 6 | tr '\n' '|' | sed 's/|$//')</raw3>" >> $o_file;
 				fi;
 				;;
 		esac;
@@ -515,6 +590,22 @@ while [[ $# -gt 0 ]]; do
 					--raw)
 						re_raw="$2";
 						shift;
+						shift;
+						;;
+					-E|--extended-regexp)
+						re_type=3;
+						shift;
+						;;
+					-F|--fixed-strings)
+						re_type=1;
+						shift;
+						;;
+					-G|--basic-regexp)
+						re_type=2;
+						shift;
+						;;
+					-P|--perl-regexp)
+						re_type=4;
 						shift;
 						;;
 					*)
