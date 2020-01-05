@@ -77,9 +77,41 @@ function d_verbose {
 	fi;
 }
 
-#TODO
 function help {
-	echo "help;";
+	echo -e "-h, --help\t\t\t\tPrint help msg.";
+	echo -e "-w, --wait, --delay <time(m|s)>\t\tMinimum time to wait between requests. Specify as (0, ns, nm), where n is +ve number";
+	echo -e "-t, --target [options]\t\t\tSpecify target.";
+		echo -e "\t-d, --domain <domain>\t\tSpecify target domain.";
+		echo -e "\t-p, --people <people>\t\tSpecify people to search";
+		echo -e "\t-r, --raw\t\t\tSearch raw info, without target";
+	echo -e "-g, --google [options]\t\t\tGoogle Search related options";
+		echo -e "\t--dork <google dork>\t\tSpecify dork to use";
+		echo -e "\t-s, --search <query>\t\tSearch query";
+		echo -e "\t-G, --guess\t\t\tGuess the dork";
+		echo -e "\t-p, --pages <number>\t\tNo. of pages to crawl";
+		echo -e "\t-n, --psize <number>\t\tNo. of results to fetch per page";
+		echo -e "\t-t, --stop <number>\t\tStop after this much results";
+	echo -e "-r, --re [options]\t\t\tSpecify regex";
+		echo -e "\t-m, --mail <regex>\t\tRegex to search for emails";
+		echo -e "\t-d, --domain <regex>\t\tRegex for how to search for domains";
+		echo -e "\t-c, --mob <regex>\t\tRegex for how to search for contact numbers";
+		echo -e "\t--raw <regex>\t\t\tRegex to use when using raw target";
+		echo -e "\t-E, --extended-regexp\t\tType of search to use";
+		echo -e "\t-F, --fixed-strings\t\tType of search to use";
+		echo -e "\t-G, --basic-regexp\t\tType of search to use (default)";
+		echo -e "\t-P, --perl-regexp\t\tType of search to use";
+	echo -e "-= [options] -=\t\t\t\tBrowser options to pass to wget";
+	echo -e "-H, --harvest [options]\t\t\tSpecift What info to harvest";
+		echo -e "\t-d, --domain\t\t\tHarvest domains";
+		echo -e "\t-m, --mail\t\t\tHarvest mails";
+		echo -e "\t-c, --mob\t\t\tHarvest numbers";
+		echo -e "\t-u, --url\t\t\tHarvest urls";
+		echo -e "\t-r, --raw\t\t\tHarvest raw info, only works if regex is specified";
+		echo -e "\t-S, --snaps\t\t\tTry to get google cache of urls";
+		echo -e "\t-s, --subdomain <file>\t\tcollect subdomains to build dictionary, provide '-' (hyphen) if using default file creation";
+		echo -e "\t-a, --all\t\t\tHarvest everything";
+	echo -e "-o, --out <file>\t\t\tSpecify output file";
+	echo -e "-v, --verbose\t\t\t\tBe verbose, specify this multiple times like (-v -v) for more verbosity";
 	exit 0;
 }
 
