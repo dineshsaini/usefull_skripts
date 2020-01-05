@@ -48,13 +48,7 @@ shopt -s extglob;
 function init {
 	e_verbose;
 
-	trap cleanup SIGINT;
-	trap cleanup SIGQUIT;
-	trap cleanup SIGKILL;
-	trap cleanup SIGSTOP;
-	trap cleanup SIGTERM;
-	trap cleanup SIGHUP;
-	trap cleanup SIGTSTP;
+	trap cleanup SIGINT SIGQUIT SIGKILL SIGSTOP SIGTERM SIGHUP SIGTSTP EXIT;
 }
 
 function cleanup {
@@ -116,6 +110,7 @@ function help {
 }
 
 function queryEnc {
+	[[ $v_verbose -ge 2 ]] && (echo "encrypting:: ($1)" >> $v_verbose_f);
 	echo $(echo "$1" | sed -e 's/%/%25/g' -e 's/!/%21/g' \
 		-e 's/"/%22/g' -e 's/#/%23/g' -e 's/\$/%24/g' \
 	       	-e 's/\&/%26/g' -e 's/'\''/%27/g' -e 's/(/%28/g' \
@@ -139,22 +134,31 @@ function google_srch {
 		echo "-1";
 		return;
 	fi;
+	[[ $v_verbose -ge 2 ]] && (echo "recieved querystring ($query)" >> $v_verbose_f);
 	
 	local nqstr="$2";
 	if [[ x"$nqstr" == "x" ]]; then
 		echo "-2";
 		return;
 	fi;
+	[[ $v_verbose -ge 2 ]] && (echo "recieved query params ($nqstr)" >> $v_verbose_f);
+
 	local gws="https://www.google.com";
 	local host="www.google.com";
 	if [[ x"$3" == "x1" ]]; then
 		gws="http://webcache.googleusercontent.com";
 		host="webcache.googleusercontent.com";
 	fi;
+	
+	[[ $v_verbose -ge 2 ]] && (echo "using gws: $gws" >> $v_verbose_f);
+	[[ $v_verbose -ge 2 ]] && (echo "using host: $host" >> $v_verbose_f);
+
 	local url="$gws/search?gbv=1&sei=rlcLXr_JAdXE4-EP6oOmcA&q=$query&$nqstr";
+	[[ $v_verbose -ge 1 ]] && (echo "using url: $url" >> $v_verbose_f);
 	local oFile="$(tempfile)";
 	local tFile="$(tempfile)";
 
+	[[ $v_verbose -ge 2 ]] && (echo "found browser options:: $b_opts" >> $v_verbose_f);
 	wget "$url" --header="'Host: $host'" \
 		--header='User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:68.0) Gecko/20100101 Firefox/68.0' \
 		--header='Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
@@ -170,12 +174,15 @@ function google_srch {
 		-O $tFile \
 		--quiet $b_opts ;
 	local retval=$?;
+
 	if [[ $retval -ne 0 ]]; then
+		[[ $v_verbose -ge 2 ]] && (echo "wget returned error: ($retval)" >> $v_verbose_f);
 		echo $retval;
 		return;
 	fi;
 
 	if [[ x"$tFile" != "x" ]]; then
+		[[ $v_verbose -ge 2 ]] && (echo "got file: $oFile" >> $v_verbose_f);
 		cat $tFile | gunzip > $oFile;
 		rm -f $tFile;
 	fi;
@@ -183,6 +190,7 @@ function google_srch {
 }
 
 function snapshot {
+	[[ $v_verbose -ge 1 ]] && (echo "trying snapshot for $1" >> $v_verbose_f);
 	sfile=$(google_srch "$(queryEnc "cache:$1")" "oq=&aqs=" 1);
 	echo $sfile;
 }
@@ -190,6 +198,9 @@ function snapshot {
 function getList {
 	local htmlPage="$1";
 	local outPage="$2";
+	
+	[[ $v_verbose -ge 1 ]] && (echo "Fetching info from $1" >> $v_verbose_f);
+
 	local retval="$( (/usr/bin/env perl -)< <(cat <<__END__
 	use v5.28.1;
 	use strict;
@@ -289,6 +300,7 @@ function google {
 	local gotAll=0;
 	local lFile="$( ([[ x"$2" == "x" ]] && tempfile) || echo $2)";
 
+	[[ $v_verbose -ge 1 ]] && (echo "google query for ($query)" >> $v_verbose_f);
 	case $(($g_rpp/10)) in
 		1)
 			g_rpp=10;
@@ -312,12 +324,15 @@ function google {
 			g_rpp=30;
 			;;
 	esac;
+	[[ $v_verbose -ge 2 ]] && (echo "using results per page: $g_rpp" >> $v_verbose_f);
 	if [[ $g_nop -le 0 ]]; then
 		$g_nop=4;
 	fi;
+	[[ $v_verbose -ge 2 ]] && (echo "using number of page: $g_nop" >> $v_verbose_f);
 	
 	while [[ $pageN -lt $g_nop ]] && [[ $hasNext -ne 0 ]]  && [[ $gotAll -ne 1 ]]; do
 		local pageQuery="start=$((pageN++))&num=$g_rpp";
+		[[ $v_verbose -ge 2 ]] && (echo "current query: $pageQuery" >> $v_verbose_f);
 
 		local oFile="$(google_srch $query $pageQuery)";
 		[[ $(echo $oFile | grep "^/tmp/" | wc -l) -eq 0 ]] && break;  # got error, exit
@@ -327,6 +342,9 @@ function google {
 		hasNext=$(echo $c | cut -d, -f1);
 		gotAll=$(echo $c | cut -d, -f2);
 		
+		[[ $v_verbose -ge 2 ]] && (echo "do we have more pages: $hasNext" >> $v_verbose_f);
+		[[ $v_verbose -ge 2 ]] && (echo "got all results: $gotAll" >> $v_verbose_f);
+		[[ $v_verbose -ge 2 ]] && (echo "sleeping for $v_delay sec" >> $v_verbose_f);
 		sleep $v_delay;
 	done;
 	echo $lFile;
@@ -336,9 +354,11 @@ function search {
 	local resFile="$(tempfile)";
 
 	if [[ $s_google -eq 1 ]]; then
+		[[ $v_verbose -ge 1 ]] && (echo "trying google search" >> $v_verbose_f);
 		# without guess
 		if [[ $g_guess -eq 0 ]]; then
 			if [[ $g_pre_q -eq 1 ]]; then
+				[[ $v_verbose -ge 2 ]] && (echo "using dork: $g_query" >> $v_verbose_f);
 				resFile=$(google "$(queryEnc "$g_query")" $resFile);
 			else
 				case $t_tar in
@@ -352,6 +372,7 @@ function search {
 			fi;
 		fi;
 		# guess also
+		[[ $g_guess -eq 1 ]] && [[ $v_verbose -ge 2 ]] && (echo "doing guess" >> $v_verbose_f);
 		[[ $g_guess -eq 1 ]] && case $t_tar in
 			1)
 				resFile=$(google "site%3A$(queryEnc "$t_domain")+-www*" $resFile);
@@ -373,16 +394,21 @@ function filter {
 	local r="";
 	case $c in 
 		1)
+			[[ $v_verbose -ge 1 ]] && (echo "extracting people name on basis of ($t_people)" >> $v_verbose_f);
+			[[ $v_verbose -ge 2 ]] && (echo "filter for people, trying lazy" >> $v_verbose_f);
 			local p="$(echo "$t_people" | sed -e 's/[[:space:]]\+/ /g' -e 's/ /.*?/g')";
 			r="$(echo "$l" | grep -P -o "$p")";
 			
 			if [[ $(echo "$r" | wc -l) -eq 0 ]]; then
+				[[ $v_verbose -ge 2 ]] && (echo "filtering for people, trying greedy" >> $v_verbose_f);
 				p="$(echo "$t_people" | sed -e 's/[[:space:]]\+/ /g' -e 's/ /.*/g')";
 				r="$(echo "$l" | grep -P -o "$p")";
 			fi;
 			;;
 		2)
+			[[ $v_verbose -ge 1 ]] && (echo "extracting domain" >> $v_verbose_f);
 			if [[ x"$re_domain" != "x" ]]; then
+				[[ $v_verbose -ge 2 ]] && (echo "using regex: $re_domain" >> $v_verbose_f);
 				case $re_type in 
 					1)
 						r="$(echo "$l" | grep -F -o "$re_domain")";
@@ -403,13 +429,16 @@ function filter {
 			fi;
 			;;
 		3)
+			[[ $v_verbose -ge 1 ]] && (echo "extracting subdomain" >> $v_verbose_f);
 			r="$(echo "$l" | sed -e 's/^\(\(ht\|f\)tp\(s\)\?\)\?\(:\)\?\(\/\)\?\(\/\)\?//' \
 				-e 's/\/.*//' \
 				-e 's/^\(www\.\)//' \
 				-e 's/\.\?[^.]*\.[^.]*$//')";
 			;;
 		4)
+			[[ $v_verbose -ge 1 ]] && (echo "extracting contacts" >> $v_verbose_f);
 			if [[ x"$re_mob" != "x" ]]; then
+				[[ $v_verbose -ge 2 ]] && (echo "using regex: $re_mob" >> $v_verbose_f);
 				case $re_type in 
 					1)
 						r="$(echo "$l" | grep -F -o "$re_mob")";
@@ -429,7 +458,9 @@ function filter {
 			fi;
 			;;
 		5)	
+			[[ $v_verbose -ge 1 ]] && (echo "extracting mails" >> $v_verbose_f);
 			if [[ x"$re_mail" != "x" ]]; then
+				[[ $v_verbose -ge 2 ]] && (echo "using regex: $re_mail" >> $v_verbose_f);
 				case $re_type in 
 					1)
 						r="$(echo "$l" | grep -F -o "$re_mail")";
@@ -450,9 +481,12 @@ function filter {
 			fi;
 			;;
 		6)
+			[[ $v_verbose -ge 1 ]] && (echo "extracting raw info" >> $v_verbose_f);
 			if [[ x"$re_raw" == "x" ]]; then
+				[[ $v_verbose -ge 2 ]] && (echo "no regex found" >> $v_verbose_f);
 				r="error: regex is not defined";
 			else
+				[[ $v_verbose -ge 2 ]] && (echo "using regex: $re_raw" >> $v_verbose_f);
 				case $re_type in 
 					1)
 						r="$(echo "$l" | grep -F -o "$re_raw")";
@@ -479,8 +513,10 @@ function harvest {
 	local snapdir="$(dirname $o_file)/snaps";
 
 	if [[ $h_snaps -eq 1 ]]; then
+		[[ $v_verbose -ge 1 ]] && (echo "using snapshot dir: ($snapdir)" >> $v_verbose_f);
 		mkdir -p $snapdir; 
 	fi;
+	[[ $v_verbose -ge 1 ]] && (echo "writing records to file: $o_file" >> $v_verbose_f);
 	echo '<?xml version="1.0"?>' >$o_file;
 	echo '<records>' >>$o_file;
 	while IFS= read -r line; do
@@ -541,6 +577,7 @@ function harvest {
 		[[ $(( $i % 3 )) -eq 0 ]] && (echo '</record>' >>$o_file);
 	done < $rFile;
 	echo '</records>' >>$o_file;
+	[[ $v_verbose -ge 1 ]] && (echo "finish writing records" >> $v_verbose_f);
 }
 
 while [[ $# -gt 0 ]]; do
@@ -564,7 +601,7 @@ while [[ $# -gt 0 ]]; do
 					;;
 				*)
 					echo "ERROR: invalid '$1' delay value.";
-					exit -1;
+					exit 1;
 					;;
 			esac;
 			;;
@@ -751,21 +788,21 @@ while [[ $# -gt 0 ]]; do
 			;;
 		*)
 			echo "ERROR: $1 not defined";
-			exit -1;
+			exit 1;
 			;;
 	esac;
 done;
 
+init;
 # if no query is provided then guess anyways
 if [[ x"$g_query" == "x" ]]; then
+	[[ $v_verbose -ge 1 ]] && (echo "query is empty, enabling guess" >> $v_verbose_f);
 	g_guess=1;
 fi;
 
 if ! [[ $t_tar -gt 0 ]]; then
 	echo "ERROR: Target is not defined";
-	exit -1;
+	exit 1;
 fi;
 
-init;
 harvest "$(search)";
-cleanup;
