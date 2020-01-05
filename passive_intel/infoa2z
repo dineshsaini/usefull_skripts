@@ -22,11 +22,11 @@ g_tr="-1";		# total results (-1 for as many, +ve => stop after this much)
 g_query="";		# user's provided query
 g_pre_q="0";		# query pre formated (0 => need to format, 1 => do not process `$g_query` value, use as-is)
 
-e_domain="0";		# extract domain (0 => flase, 1 => true), use re_doamin to extract
+e_domain="1";		# extract domain (0 => flase, 1 => true), use re_doamin to extract
 e_email="0";		# extract email addresses (0 => false, 1 => true), use re_mail to extract
 e_mob="0";		# extract contact numbers (0 => false, 1 => true), use re_mob to extract ## only if target is people
 e_raw="0";		# extract raw info (0 => false, 1=> true), use re_raw to extract ## only if re_raw is defined	
-e_url="0";		# extract urls (0 => false, 1=> true), use re_url to extract  ## only if target is people
+e_url="1";		# extract urls (0 => false, 1=> true), use re_url to extract  ## only if target is people
 
 h_subd="0";		# harvest subdomain in seperate dictionary file
 h_snaps="0";		# harvest snapshot of urls ## only if e_url is 1
@@ -39,11 +39,45 @@ o_subd_file="";		# save subdomains in this, use - to provide default file
 v_delay="1";		# min. delay between requests values (0,\[0-9]+[sm]\)
 v_verbose=0;		# be verbose
 v_count=0;		# current results count
+v_verbose_f="";		# verbose file name
 
-FLAG_EXTGLOB_DISABLED=$(shopt | grep "^extglob" | grep "off$" | wc -l);
+FLAG_BGPID="";
 
-[[ $FLAG_EXTGLOB_DISABLED -eq 1 ]] && shopt -s extglob;
+shopt -s extglob;
 
+function init {
+	e_verbose;
+
+	trap cleanup SIGINT;
+	trap cleanup SIGQUIT;
+	trap cleanup SIGKILL;
+	trap cleanup SIGSTOP;
+	trap cleanup SIGTERM;
+	trap cleanup SIGHUP;
+	trap cleanup SIGTSTP;
+}
+
+function cleanup {
+	d_verbose;
+}
+
+function e_verbose {
+	if [[ $v_verbose -ge 0 ]]; then
+		v_verbose_f=$(tempfile);
+		tail -f $v_verbose_f &
+		FLAG_BGPID="$!";
+	fi;
+}
+
+function d_verbose {
+	if [[ x"$FLAG_BGPID" != "x" ]]; then
+		kill $FLAG_BGPID > /dev/null;
+		FLAG_BGPID="";
+		rm -f $v_verbose_f > /dev/null;
+	fi;
+}
+
+#TODO
 function help {
 	echo "help;";
 	exit 0;
@@ -150,7 +184,7 @@ function getList {
 				\$link =~ s/&.*\$//;
 				\$link =~ s/^\/url\?q=//;
 				my \$title = \$k->children->first->all_text;
-				my \$summary = \$k->parent->next->next->all_text;
+				my \$summary = \$k->parent->next->next->content;
 				\$summary =~ s/\n/ /g;
 				# say "link >> \$link";
 				# say "title >> \$title";
@@ -700,8 +734,6 @@ if ! [[ $t_tar -gt 0 ]]; then
 	exit -1;
 fi;
 
+init;
 harvest "$(search)";
-
-# end section, could be controlled using trap
-[[ $FLAG_EXTGLOB_DISABLED -eq 1 ]] && shopt -u extglob;
-
+cleanup;
