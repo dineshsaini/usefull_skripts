@@ -145,8 +145,8 @@ gsettings set org.gnome.desktop.search-providers disable-external true
 
 # and finally,
 # Application Options:
-  -s, --filesystem     Remove filesystem indexer database
-  -r, --rss            Remove RSS indexer database
+#  -s, --filesystem     Remove filesystem indexer database
+#  -r, --rss            Remove RSS indexer database
 
 tracker3 reset -s -r
 
