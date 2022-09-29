@@ -1,0 +1,84 @@
+<html>
+    <head>
+        <title>PHP message board - server session based</title>
+    </head>
+    <body>
+        <?php
+            $msg_file = "/tmp/php_msgboard/msg_file.tmp";
+            $msg = "";
+            $print_msg_id = "pmsg_id";
+            $spaced_lines = "slines";
+            $pmid_checked = "checked";
+            $sl_checked = "checked";
+
+            function validate($data){
+                return trim($data);
+            }
+
+            if($_SERVER["REQUEST_METHOD"] == "POST") {
+                $print_msg_id = validate($_POST['pmsg_id']);
+                $spaced_lines = validate($_POST['slines']);
+                $msg = validate($_POST['msg']);
+           
+                if($print_msg_id == "pmsg_id"){
+                    $pmid_checked = "checked";
+                }else{
+                    $pmid_checked = "";
+                }
+
+                if($spaced_lines == "slines") {
+                    $sl_checked = "checked";
+                } else {
+                    $sl_checked = "";
+                }
+
+                if ($msg != ""){
+                    $mfile = fopen($msg_file, "a") or die("Unable to save messages!");
+                    fwrite($mfile, $msg . "\n");
+                    fclose($mfile);
+                }
+            }
+        ?>
+
+        <form method="post" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]);?>" >
+            <label for="msg" style="text-align:center;display: block;">Message:</label>
+            <br>
+            <textarea id="msg" name="msg" rows="7" cols="100" style="margin: auto; resize:none;display: block;" required ></textarea> 
+            <br>
+            <input type="hidden" name="pmsg_id" value="<?php echo $print_msg_id; ?>">
+            <input type="hidden" name="slines" value="<?php echo $spaced_lines; ?>">
+            <button type="submit" value="submit" style="margin: auto;display: block;">post message</button>
+        </form>
+
+        <div id="msg_board">
+            <span>Message Board:</span>
+            <form method="post" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]);?>" >
+                <input type="checkbox" id="pmsg_id" name="pmsg_id" value="pmsg_id" <?php echo $pmid_checked; ?> >
+                <label for="pmsg_id">print message id</label><br>
+                
+                <input type="checkbox" id="slines" name="slines" value="slines" <?php echo $sl_checked; ?> >
+                <label for="slines">spaced lines</label><br>
+                
+                <inpu type="hidden" name="msg" value="" >
+                <button type="submit" value="submit" >save</button>
+            </form>
+            <?php
+                if (file_exists($msg_file)){
+                    $lines = file($msg_file);
+                    foreach ($lines as $line_num => $line ) {
+                        echo "<div class='msg'>";
+                        if ($pmid_checked == "checked"){
+                            $index = $line_num + 1 ;
+                            echo "<span><b>Message #{$index}</b>:&nbsp;&nbsp;&nbsp;&nbsp;<span>";
+                        }
+                        echo "<pre style='display: inline;'>$line</pre>";
+                        if ($sl_checked == "checked"){
+                            echo "<br>";
+                        }
+                        echo "</div>";
+                    }
+                }
+            ?>
+        </div>
+    </body>
+</html>

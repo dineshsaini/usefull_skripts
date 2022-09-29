@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+
+fname=""
+dname=""
+
+help(){
+    echo "\$ script -f [fileName]"
+    echo -e "\tto rename just one file"
+    echo "\$ script -d [dirname]"
+    echo -e "\tto rename all the files from directory, excluding subdirs"
+    echo "$ script -h"
+    echo -e "\tto print help"
+}
+
+_m_file(){
+    local fn="$1"
+    if [ -z "$fn" ]; then
+        return 1;
+    fi
+    #echo "[DEBUG]::fn ==> $fn "  > /dev/stderr
+
+    local n_fn=`echo "$fn" | sed -e 's/:/_/g' \
+                    -e 's/\&/and/g' \
+                    -e 's/\s\+/_/g' \
+                    -e 's/\\\\/_/g'   \
+                    -e 's/_\+/_/g'  \
+                    -e 's/_\?-_\?/-/g'`
+
+    echo "$n_fn"
+}
+
+m_file(){
+   if [ -z "$fname" ]; then
+        echo "ERROR: No file name given" > /dev/stderr
+        exit 1
+    else
+        local dn=`dirname "$fname"`
+        fname=`basename "$fname"`
+
+        local n_fn=`_m_file "$fname"`
+        echo -n "'$dn/$fname' ---> '$dn/$n_fn'"
+        mv "$dn/$fname" "$dn/$n_fn"
+        echo " [DONE]"
+    fi
+}
+
+_m_dir(){
+    local fn=`basename "$1"`
+    local n_fn=`_m_file  "$fn"`
+    
+    echo -n "'$dname/$fn' ---> '$dname/$n_fn'"
+    mv "$dname/$fn" "$dname/$n_fn"
+    echo " [DONE]"
+
+}
+
+m_dir(){
+    if [ -z "$dname" ]; then
+        echo "ERROR: No dir name given" > /dev/stderr
+        exit 1
+    else
+        local fn="";
+
+        find "$dname" -maxdepth 1 -type f -print0 | while IFS= read -r -d '' fn; do 
+            _m_dir "$fn";
+        done
+    fi
+}
+
+if [ $# -eq 0 ]; then
+    help
+    exit
+fi
+
+while [ $# -gt 0 ]; do
+    if [ "$1" == "-h" ]; then
+        help
+        exit 0
+    elif [ "$1" == "-f" ]; then
+        shift
+        fname="$1"
+        break
+    elif [ "$1" == "-d" ]; then
+        shift
+        dname="$1"
+        break
+    else
+        echo "ERROR: someting goes wrong" > /dev/stderr
+        help
+        exit 1
+    fi;
+    shift
+done
+
+if [ -n "$fname" ]; then
+    echo "INFO: Renaming file: $fname"
+    m_file
+elif [ -n "$dname" ]; then
+    echo "INFO: Renaming files from dir: $dname"
+    m_dir
+else
+    echo "ERROR: someting goes wrong" > /dev/stderr
+    exit 1
+fi
+

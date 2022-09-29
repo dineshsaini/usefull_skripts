@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+echo "Paginate through all philosphy notes"
+echo "press 'q', to quite one note and go to next."
+
+annote --no-pretty --db phil -l --stdout  --format '<SNO>~<NID>~<TITLE>' | \
+sed -e '2,$p' -n | \
+while IFS= read -r line; do
+    c=`echo $line | cut -d~ -f1`;
+    nid=`echo $line | cut -d~ -f2`;
+    title=`echo $line | cut -d~ -f3`;
+    echo -e "> SNO: '$c'\tNID:'$nid'\tTITLE:'$title'";
+    annote --db phil -o $nid ;
+    sleep 0.2s;
+done;
+

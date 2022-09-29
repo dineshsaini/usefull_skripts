@@ -1,0 +1,162 @@
+<html>
+    <head>
+        <title>Annote capture and save notes in db</title>
+        <style>
+            .box {
+                height: 100px; 
+                width:80%; 
+                overflow: scroll; 
+                border: 1px solid #444; 
+                padding: 5px; 
+            }
+            .error {
+                color: #FF0000;
+            }
+            .info {
+                color: #0000FF;
+            }
+            .output {
+
+                color: rgb(51, 155, 3);
+            }
+            .cmd {
+                color: rgb(165, 4, 4);
+            }
+        </style>
+    </head>
+    <body>
+
+<?php
+$sflag  = "0";
+$note   = "";
+$status = '<span class="output">ready to upload<span>';
+
+$db     = "temp";
+$title  = "";
+$gname  = "";
+$tags   = "";
+
+$cmd        = "";
+$cmd_args   = "--silent";
+$cmd_out    = null;
+$cmd_retval = null;
+
+function validate($data){
+    return trim($data);
+}
+
+if($_SERVER["REQUEST_METHOD"] == "POST") {    
+    $sflag  = validate($_POST['sflag']);
+    $note   = validate($_POST['note']);
+    $db     = validate($_POST['db']);
+    $title  = validate($_POST['title']);
+    $gname  = validate($_POST['gname']);
+    $tags   = validate($_POST['tags']);
+
+    if($sflag == 1){
+        if(empty($note)){
+            $status='<span class="error">please enter the note first before uploading..</span><br>';
+        }else{
+            $status="";
+            if (empty($db)){
+                $status .= '<span class="info">db name is empty, using default db.</span><br>';
+            }else{
+                $cmd_args .= " --db '$db'";
+            }
+            
+            $cmd_args .= " --new";
+
+            if (empty($title)){
+                $status .= '<span class="error">title is empty</span><br>';
+                $status .= '<span class="info">using title: "Uploaded via webscript"</span><br>';
+                $title="Uploaded via webscript";
+            }
+            
+            $cmd_args .= " --title '$title'";
+
+            if (empty($gname)){
+                $status .= '<span class="info">group is empty, using default group.</span><br>';
+            }else{
+                $cmd_args .= " --group '$gname'";
+            }
+
+            if (empty($tags)){
+                $status .= '<span class="info">tags are empty, using default tag.</span><br>';
+            }else{
+                $cmd_args .= " --tags '$tags'";
+            }
+
+            $cmd_args .= " --file -";
+            
+            $note = str_replace("\r", '', $note);
+
+            $cmd = "cat <<'NOTE_EOF' | annote $cmd_args 2>&1
+$note
+NOTE_EOF";
+            $status .= "using command:: <pre class='cmd'>$ $cmd</pre><br>";
+
+            exec("$cmd", $cmd_out, $cmd_retval);
+        }
+    }
+}
+?>
+        <form method="post" action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]);?>" >
+            <label for="db" style="text-align:center;display: block;">DB Name:</label>
+            <input id="db" name="db" value="<?php echo $db?>" style="margin: auto; display: block;" />
+            <br>
+
+            <label for="title" style="text-align:center;display: block;">Note title:</label>
+            <input id="title" name="title" value="<?php echo $title?>" style="margin: auto; display: block;" />
+            <br>
+
+            <label for="gname" style="text-align:center;display: block;">Note group:</label>
+            <input id="gname" name="gname" value="<?php echo $gname?>" style="margin: auto; display: block;" />
+            <br>
+
+            <label for="tags" style="text-align:center;display: block;">Note tags:</label>
+            <input id="tags" name="tags" value="<?php echo $tags?>" style="margin: auto; display: block;" />
+            <br>
+
+            <label for="note" style="text-align:center;display: block;">Enter Note:</label>
+            <br>
+            <textarea id="note" name="note" rows="15" cols="100" style="margin: auto; resize:none;display: block;" required ></textarea> 
+            <br>
+
+            <input type="hidden" name="sflag" value="1" />
+
+            <button type="submit" value="submit" style="margin-left: 50%;display: block;">upload</button>
+        </form>
+
+        <div id="status">
+            <span>status:: </span>
+            <div class="box">
+                <?php echo $status ?>
+            </div>
+        </div>
+
+        <div id="note">
+            <span>note:: </span>
+            <div class="box output">
+                    <pre><?php echo $note ?></pre>
+            </div>
+        </div>
+
+        <div id="cmd_out">
+            <span>command output::</span> 
+            <div class="box cmd">
+                    <?php
+                        if ($cmd_retval === 0){
+                            echo "<span class='info'>Command completed succesfully.</span><br>";
+                        } else{
+                            echo "<span class='error'>Command exit with code: $cmd_retval.</span><br>";
+                        }
+                    ?>
+                    <pre><?php
+                        foreach ($cmd_out as $i){
+                            echo "$i\n";
+                        }
+                    ?></pre>
+            </div>
+        </div>
+    </body>
+</html>

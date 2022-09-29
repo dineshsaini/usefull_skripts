@@ -1,0 +1,41 @@
+//@version=5
+indicator("PVPWMA v01")
+
+n = input.int(55, "Length", minval=2)
+
+ref = input.string("avg_high", "Price", options=["high", "low", "open", "close", "avg_high", "avg_low"])
+
+PVPWMA() =>
+    float num = 0.0
+    float den = 0.0
+    float[] vols = array.new_float(0)
+    for i = 1 to n
+        array.push(vols, volume[i] < 0 ? volume[i] * -1 : volume[i])
+    array.sort(vols, order.ascending)
+    
+    for i = 1 to n
+        v = volume[i] < 0 ? volume[i] * -1 : volume[i]
+        wt = 0
+        
+        for j = 0 to (n - 1)
+            if  array.get(vols, n - 1 - j) == v
+                wt := n - j
+                array.set(vols, n - 1 - j, 0.0)
+                break
+
+        float p = switch ref
+            "high"      => high[i]
+            "low"       => low[i]
+            "open"      => open[i]
+            "close"     => close[i]
+            "avg_high"  => (open[i] + close[i] + high[i])/3
+            "avg_low"   => (open[i] + close[i] + low[i])/3
+        num += p * wt * v
+        den += wt * v
+    float p_avg = num/den
+
+plot(PVPWMA(), color=color.red)
+
+
+
+

@@ -1,0 +1,31 @@
+
+highlight mainheads cterm=bold 
+match mainheads /^##@[0-9]\+ .*/
+
+highlight subheads ctermfg=DarkGreen
+2match subheads /^\s*#@[0-9]\+\.[0-9.]\+ .*/
+
+highlight comments ctermfg=DarkGrey
+3match comments /^\s*\(##\)\?@[0-9.]*! .*/
+
+highlight references ctermfg=Yellow cterm=bold,underline
+4match references /@{[0-9.]\+}/
+
+" only 3 matches are allowed in one buffer/windows so cant use this for so
+" many patterns and 3 match is also used by other commands that will override 
+" when demanded, and clearing our defined highlight group, so 3rd is also not
+" much usable.
+
+
+" ------------ final used ones:: ----------------------------
+
+
+" highlighting comments for annote notes
+highlight comments ctermfg=DarkGrey
+au BufRead *.note match comments /^\s*\(##\)\?@[0-9.*-]*! .*/
+
+" highlights for sub heading and back references
+highlight subheads ctermfg=DarkGreen
+au BufRead *.note 2match subheads /\(^\s*#@[0-9]\+[0-9.]*[0-9]\+ .*\|@{[0-9.]\+}\|@\[[^]]\+\]\)/
+
+

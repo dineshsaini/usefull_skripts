@@ -1,0 +1,26 @@
+if [ -z "$__PREFIX__" ]; then
+    __PREFIX__="pkg";
+fi
+
+FNAME="func"
+
+function a.b.c.d.e.f.g.h.i.j.k.l (){
+    echo "inside a.b.c.d.e.f.g.h.i.j.k.l ($*);"
+}
+
+shopt -s expand_aliases
+from() {
+    local pname="$1"
+    local iname="$3"
+    local aname="$5"
+    alias ${__PREFIX__}.$aname="$pname.$iname"
+    alias -p 
+}
+echo "++++++++++"
+alias -p
+echo "-------------"
+from a.b.c.d.e.f.g.h.i.j.k import l as f
+echo "************"
+alias -p
+echo "##############"
+pkg.f 3322
