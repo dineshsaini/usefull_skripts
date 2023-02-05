@@ -38,7 +38,6 @@ exit 0
 url_to_file(){
     local url="$GHDB_URL/$1"
     local temp_file="$(mktemp)"
-    echo "file is $temp_file" > /dev/stderr
     wget -q "$url" -O "$temp_file"
 
     if [ $? -ne 0 ]; then
@@ -137,13 +136,13 @@ while [[ "$i" -le "$endc" ]]; do
 
     printf "$TEMPLATE" "$ghdb_url" "$severity" "$category" "$p_date" "$author" "$dork" "$desc" > "$outdir/$i.txt"
 
-    #[ -f "$dork_file" ] && rm -f $dork_file 
+    [ -f "$dork_file" ] && rm -f $dork_file 
 
     sleep 1
     i="$(( i + 1 ))"
 done
 
-
+echo "Finished"
 
 
 
