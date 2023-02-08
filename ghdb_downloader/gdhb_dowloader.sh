@@ -63,6 +63,36 @@ extract_xpath_from(){
     printf "%s" "$element_body"
 }
 
+count_nresp="0"
+handle_no_response(){
+    local retval=0
+    count_nresp="$(( count_nresp + 1 ))"
+
+    case "$count_nresp" in
+        1)
+            echo "sleeping for 2 sec." > /dev/stderr
+            sleep 2
+            ;;
+        2)
+            echo "sleeping for another 3 sec." > /dev/stderr
+            sleep 3
+            ;;
+        3)
+            echo "sleeping for another 4 sec." > /dev/stderr
+            sleep 4
+            ;;
+        *)
+            echo "giving up! after sleeping for last 5 sec." > /dev/stderr
+            count_nresp="0"
+            retval=1
+            sleep 5
+            ;;
+    esac
+
+    return $retval
+}
+
+
 while [[ $# -gt 0 ]]; do
     i="$1"
     shift
@@ -118,6 +148,7 @@ mkdir -p "$outdir"
 # correct formatting of numbers that starts with 0
 i="$(( from + 1 - 1 ))"
 
+
 while [[ "$i" -le "$endc" ]]; do
     echo ">> Processing for <$i>:"
     dork_file="$(url_to_file "$i")"
@@ -126,6 +157,11 @@ while [[ "$i" -le "$endc" ]]; do
         echo ">>  Got response."
     else
         echo ">>  No response."
+
+        handle_no_response
+        j=$?
+        [[ "$j" -ne 0 ]] && i="$(( i + 1 ))"
+
         continue
     fi
 
