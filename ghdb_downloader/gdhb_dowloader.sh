@@ -26,8 +26,11 @@ xpath_desc='/html/head/meta[4]/@content'
 
 help(){
     cat <<EOS
-$0 --from=N [--upto=N] [--total=N] [--help|-h]
-where, N is integer.
+$0 --from=N [--upto=N] [--total=N] [--help|-h] --outdir=<dir>
+where, 
+    N       is integer,
+    <dir>   is fully qualified directory.
+
 --from              Required.
 --upto|--total      One from them is required, If both present, --total will be ignored.
 --help|-h           To print this help.
