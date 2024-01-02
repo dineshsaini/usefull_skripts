@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+
+ssh-proxy(){
+    __=`printf '\t'`
+    # Change the below variables as per prefrence (FIXMEs are must)
+    __IP__="192.168.2.3"				# IP on which to setup ssh tunnel	# FIXME
+    __PORT__="57391"					# port to connect
+    __USER__="pvt_user"					# user to connect to ssh		# FIXME
+    __LOCK_DIR__="/tmp/`whoami`/ssh_socks_proxy"	# location to create temp tunnel socket
+    __LOCK_FILE__="$__LOCK_DIR__/conn.socket.lck"
+
+    while [[ $# -gt 0 ]]; do
+        _opt_="$1"
+        shift
+
+        case "$_opt_" in
+            -h|--help|help)
+                cat <<EOH
+ssh-proxy [OPTIONS]
+
+OPTIONS:
+-h, --help, help${__}Print this help and exit.
+start${__}${__}${__}Setup ssh socks proxy tunnel.
+stop${__}${__}${__}Destroy ssh socks proxy tunnel.
+restart${__}${__}${__}Stop and start ssh socks proxy tunnel.
+
+Setup reverse ssh tunnel for socks5 proxy.
+EOH
+                ;;
+            start)
+                printf '%s\n' "Starting ssh socks proxy tunnel."
+
+                mkdir -p $__LOCK_DIR__
+		ssh -fNn -D $__IP__:$__PORT__ $__IP__ -l $__USER__ -o ExitOnForwardFailure=yes -o ControlMaster=auto -o ControlPath=$__LOCK_FILE__
+                ;;
+            stop)
+                printf '%s\n' "Stoping ssh socks proxy tunnel."
+
+                ssh -o ControlMaster=auto -o ControlPath=$__LOCK_FILE__ -O exit $__IP__
+                ;;
+            restart)
+                ssh-proxy stop
+                ssh-proxy start
+                ;;
+        esac
+    done
+}
+
+
+
