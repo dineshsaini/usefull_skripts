@@ -2,7 +2,7 @@
 
 
 get_current_ip(){
-    echo "`ip -4 -br addr show up scope global | grep -P '([0-9]+\.?){4}' -o --color=never`"
+    printf "%s" "`ip -4 -br addr show up scope global | grep -P '([0-9]+\.?){4}' -o --color=never`"
 }
 
 
