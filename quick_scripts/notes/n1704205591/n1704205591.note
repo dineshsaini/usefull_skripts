@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 
 
+get_current_ip(){
+    echo "`ip -4 -br addr show up scope global | grep -P '([0-9]+\.?){4}' -o`"
+}
+
+
 ssh-proxy(){
     __=`printf '\t'`
     # Change the below variables as per prefrence (FIXMEs are must)
@@ -21,7 +26,7 @@ ssh-proxy [OPTIONS]
 
 OPTIONS:
 -h, --help, help${__}Print this help and exit.
-start${__}${__}${__}Setup ssh socks proxy tunnel.
+start [dynamic]${__}${__}Setup ssh socks proxy tunnel.
 stop${__}${__}${__}Destroy ssh socks proxy tunnel.
 restart${__}${__}${__}Stop and start ssh socks proxy tunnel.
 
@@ -29,6 +34,10 @@ Setup reverse ssh tunnel for socks5 proxy.
 EOH
                 ;;
             start)
+		if [ "$1" == "dynamic" ]; then
+                    __IP__=`get_current_ip`
+                    shift
+                fi
                 printf '%s\n' "Starting ssh socks proxy tunnel."
 
                 mkdir -p $__LOCK_DIR__
