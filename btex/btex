@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+__FILE__=`realpath "${BASH_SOURCE[0]}"`
+__PWD__=`dirname "$__FILE__"`
+
+. "$__PWD__/lib/base.sh"
+
+load_lib "argparser"
+load_lib "btex"
+
+
+reg_arg_parser "btex"
+
+reg_arg "btex" "file" "-f|--file" "value" "Absolute path of file to process."
+reg_arg "btex" "help" "-h|--help" "flag" "Print this help and exit."
+
+parse_args "btex" "$@"
+
+is_arg_set "btex" "help" > /dev/null && args_print_help "btex"
+
+file="`get_arg_val "btex" "file"`"
+
+unreg_arg_parser "btex"
+
+btex "$file"
+
